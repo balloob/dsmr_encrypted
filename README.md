@@ -19,11 +19,31 @@ It is a fork of the built‑in Home Assistant [`dsmr`] integration that bundles 
 [`dsmr`]: https://www.home-assistant.io/integrations/dsmr
 [`dsmr_parser`]: https://github.com/ndokter/dsmr_parser
 [ndokter/dsmr_parser#178]: https://github.com/ndokter/dsmr_parser/pull/178
+[phase-2 branch]: https://github.com/balloob/dsmr_parser/tree/feature/encrypted-meter-support
 
-> **Why a separate integration?** The built‑in `dsmr` integration pins a released
-> `dsmr-parser` from PyPI that does not yet contain encrypted‑telegram support
-> over the readers. Vendoring the library avoids a dependency clash with that
-> pinned version, so this integration can run alongside the built‑in one.
+## Project status
+
+**This is a staging/testing vehicle, not the intended long‑term home.** It exists
+so the *whole chain* — encrypted‑frame decoding → binary framing in the readers →
+config‑flow key entry → Home Assistant entities — can be exercised end‑to‑end on a
+real meter **while the underlying changes are being upstreamed**. The plan is to
+land the library and integration changes upstream and then retire this repo.
+
+The bundled library changes live on the [phase‑2 branch] of a `dsmr_parser` fork
+and are being upstreamed in two pieces:
+
+- **Luxembourg Smarty (`MSn`) spec + fixed public auth key** → [ndokter/dsmr_parser#178].
+- **Binary framing + key plumbing through the readers** → the [phase‑2 branch]
+  (to be opened as a follow‑up PR against `dsmr_parser`).
+
+Once both land in a released `dsmr-parser` and Home Assistant's built‑in [`dsmr`]
+integration picks it up, this custom integration is no longer needed.
+
+> **Why a separate integration in the meantime?** The built‑in `dsmr` integration
+> pins a released `dsmr-parser` from PyPI that does not yet contain encrypted‑
+> telegram support over the readers. Vendoring the library here avoids a dependency
+> clash with that pinned version, so this integration can run alongside the built‑in
+> one for testing.
 
 ## Installation (HACS)
 
@@ -72,6 +92,7 @@ Request the P1 port activation and the encryption key from your grid operator
   retained alongside the code).
 - Luxembourg Smarty (`MSn`) specification support from
   [ndokter/dsmr_parser#178] by Pol Bettinger.
+- Binary framing + key plumbing through the readers — [phase‑2 branch].
 - The Home Assistant `dsmr` integration this is forked from.
 
 This repository is MIT licensed (see `LICENSE`).

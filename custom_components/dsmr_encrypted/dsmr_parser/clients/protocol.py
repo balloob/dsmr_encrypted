@@ -8,7 +8,7 @@ from serialx import create_serial_connection
 
 from .. import telegram_specifications
 from .telegram_buffer import TelegramBuffer, EncryptedTelegramBuffer
-from ..exceptions import ParseError, InvalidChecksumError
+from ..exceptions import ParseError, InvalidChecksumError, DecryptionError
 from ..parsers import TelegramParser
 from .settings import SERIAL_SETTINGS_V2_2, \
     SERIAL_SETTINGS_V4, SERIAL_SETTINGS_V5
@@ -119,6 +119,9 @@ class DSMRProtocol(asyncio.Protocol):
         self._authentication_key = authentication_key
         self._encrypted = bool(
             telegram_parser.telegram_specification.get("general_global_cipher"))
+        # set when a telegram could not be decrypted; a fatal, unrecoverable
+        # condition (wrong key) that tears down the connection
+        self.decryption_error: DecryptionError | None = None
         # buffer to keep incomplete incoming data
         self.telegram_buffer = \
             EncryptedTelegramBuffer() if self._encrypted else TelegramBuffer()
@@ -182,6 +185,14 @@ class DSMRProtocol(asyncio.Protocol):
         try:
             parsed_telegram = self.telegram_parser.parse(
                 telegram, self._encryption_key, self._authentication_key)
+        except DecryptionError as e:
+            # Unrecoverable: with a configured key every telegram will fail the
+            # same way. Record it and tear down the connection instead of
+            # spinning on broken telegrams.
+            self.log.error("Failed to decrypt telegram, check the keys: %s", e)
+            self.decryption_error = e
+            if self.transport:
+                self.transport.close()
         except InvalidChecksumError as e:
             self.log.info(str(e))
         except ParseError:

@@ -62,6 +62,7 @@ class DSMRConnection:
         self._protocol = protocol
         self._encryption_key = encryption_key
         self._authentication_key = authentication_key
+        self._decryption_failed = False
         self._telegram: dict[str, DSMRObject] = {}
         self._equipment_identifier = obis_ref.EQUIPMENT_IDENTIFIER
         if dsmr_version == "5B":
@@ -152,7 +153,16 @@ class DSMRConnection:
                 # result in CannotCommunicate error)
                 transport.close()
                 await protocol.wait_closed()
+            # A wrong key tears the connection down immediately (the protocol
+            # closes the transport on a DecryptionError), so wait_closed()
+            # returns before the timeout. Surface it as a key error.
+            if getattr(protocol, "decryption_error", None) is not None:
+                self._decryption_failed = True
         return True
+
+    def decryption_failed(self) -> bool:
+        """Return whether decryption failed (wrong key)."""
+        return self._decryption_failed
 
 
 async def _validate_dsmr_connection(
@@ -170,6 +180,9 @@ async def _validate_dsmr_connection(
 
     if not await conn.validate_connect(hass):
         raise CannotConnect
+
+    if conn.decryption_failed():
+        raise InvalidKey
 
     equipment_identifier = conn.equipment_identifier()
     equipment_identifier_gas = conn.equipment_identifier_gas()
@@ -374,6 +387,8 @@ class DSMRFlowHandler(ConfigFlow, domain=DOMAIN):
             errors["base"] = "cannot_connect"
         except CannotCommunicate:
             errors["base"] = "cannot_communicate"
+        except InvalidKey:
+            errors["base"] = "invalid_key"
 
         return data
 
@@ -409,3 +424,7 @@ class CannotConnect(HomeAssistantError):
 
 class CannotCommunicate(HomeAssistantError):
     """Error to indicate we cannot connect."""
+
+
+class InvalidKey(HomeAssistantError):
+    """Error to indicate the decryption key is invalid."""

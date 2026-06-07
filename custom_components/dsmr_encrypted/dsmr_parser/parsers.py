@@ -6,6 +6,7 @@ from ctypes import c_ushort
 from decimal import Decimal
 
 from dlms_cosem.connection import XDlmsApduFactory
+from dlms_cosem.exceptions import DecryptionError
 from dlms_cosem.protocol.xdlms import GeneralGlobalCipher
 
 from .objects import MBusObject, MBusObjectPeak, CosemObject, ProfileGenericObject, Telegram
@@ -69,7 +70,14 @@ class TelegramParser(object):
                     logger.warning("Untested compression")
                 if apdu.security_control.broadcast_key:
                     logger.warning("Untested broadcast key")
-                telegram_data = apdu.to_plain_apdu(enc_key, auth_key).decode("ascii")
+                # A wrong key or a corrupted frame fails GCM tag verification.
+                # Re-raise as ParseError so callers (readers/protocol) that
+                # already handle ParseError can skip the telegram gracefully
+                # instead of crashing.
+                try:
+                    telegram_data = apdu.to_plain_apdu(enc_key, auth_key).decode("ascii")
+                except DecryptionError as err:
+                    raise ParseError("Failed to decrypt telegram: %s" % err)
             else:
                 try:
                     if unhexlify(telegram_data[0:2])[0] == GeneralGlobalCipher.TAG:

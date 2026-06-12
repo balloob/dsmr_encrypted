@@ -67,8 +67,15 @@ Already ported from core:
   `create_rfxtrx_tcp_dsmr_reader`.
 
 Fork‑only (not from core, won't transfer upstream as‑is): the encrypted meter
-support, and the **labelled** version picker (`DSMR_VERSIONS` is a
-`token → label` dict; core uses a plain set / i18n strings).
+support, the **labelled** version picker (`DSMR_VERSIONS` is a `token → label`
+dict; core uses a plain set / i18n strings), and the vendored parser's
+**decrypt‑without‑verification fallback** for meters configured without a
+user‑supplied authentication key (Luxembourg Smarty): when authenticated GCM
+decryption fails against the spec's fixed public auth key, it decrypts using
+only the encryption key (as ESPHome does) and relies on the telegram CRC. This
+is intentionally *not* in the upstream `dsmr_parser` branch — it changes the
+authenticated behaviour added in #178 and warrants a separate upstream
+discussion.
 
 [home-assistant/core#171103]: https://github.com/home-assistant/core/pull/171103
 [core@d7f42ed]: https://github.com/home-assistant/core/commit/d7f42ed0c06f9bb2fd1abd32a53099edd2a42402

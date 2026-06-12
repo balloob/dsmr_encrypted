@@ -689,18 +689,17 @@ LUXEMBOURG_SMARTY['objects'].extend([
 #
 # Per the official Luxmetering E-Meter P1 Specification v1.1.3 (section 3.2.5):
 # - Encryption: AES-128-GCM (DLMS security suite 0)
-# - AAD (17 bytes): 0x30 || 00112233445566778899AABBCCDDEEFF
-#   The 16-byte authentication key is fixed and identical for all Smarty meters.
-#   Users only need to provide the per-meter encryption key (obtained from DSO).
 # - IV: system-title (8 bytes) || frame counter (4 bytes)
 # - GCM tag length: 12 bytes
+#
+# Decryption uses only the per-meter encryption key (from the DSO). The GCM
+# authentication tag is not verified (the parser decrypts without it and relies
+# on the telegram CRC), so no authentication key is needed.
 #
 # The MSN spec extends LUXEMBOURG_SMARTY with the full set of OBIS objects
 # defined in Table 3.1 of the official specification.
 MSN = deepcopy(LUXEMBOURG_SMARTY)
 MSN['general_global_cipher'] = True
-# Fixed authentication key for all Luxmetering Smarty meters (public, per spec 3.2.5)
-MSN['authentication_key'] = '00112233445566778899AABBCCDDEEFF'
 MSN['objects'].extend([
     {
         'obis_reference': obis.ELECTRICITY_REACTIVE_IMPORTED_TOTAL,

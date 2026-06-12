@@ -12,7 +12,6 @@ PLATFORMS = [Platform.SENSOR]
 CONF_DSMR_VERSION = "dsmr_version"
 CONF_TIME_BETWEEN_UPDATE = "time_between_update"
 CONF_ENCRYPTION_KEY = "encryption_key"
-CONF_AUTHENTICATION_KEY = "authentication_key"
 
 CONF_SERIAL_ID = "serial_id"
 CONF_SERIAL_ID_GAS = "serial_id_gas"
@@ -46,13 +45,10 @@ DSMR_VERSIONS = {
 }
 
 # Versions that use AES-128-GCM encrypted (DLMS general-global-cipher) telegrams
-# and therefore require an encryption key.
+# and therefore require an encryption key. The GCM authentication tag is not
+# verified (integrity comes from the telegram CRC), so only the encryption key
+# is ever needed -- no authentication key.
 ENCRYPTED_DSMR_VERSIONS = {"MSn", "SAGEMCOM_T210_D_R"}
-
-# Encrypted versions whose authentication key is fixed/public and embedded in
-# the telegram spec, so the user only supplies the encryption key (no auth-key
-# field in the config flow). The Luxembourg Smarty (MSn) is one such meter.
-EMBEDDED_AUTH_KEY_VERSIONS = {"MSn"}
 
 DSMR_PROTOCOL = "dsmr_protocol"
 RFXTRX_DSMR_PROTOCOL = "rfxtrx_dsmr_protocol"

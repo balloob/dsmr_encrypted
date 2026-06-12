@@ -22,7 +22,6 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import SerialPortSelector
 
 from .const import (
-    CONF_AUTHENTICATION_KEY,
     CONF_DSMR_VERSION,
     CONF_ENCRYPTION_KEY,
     CONF_SERIAL_ID,
@@ -32,7 +31,6 @@ from .const import (
     DOMAIN,
     DSMR_PROTOCOL,
     DSMR_VERSIONS,
-    EMBEDDED_AUTH_KEY_VERSIONS,
     ENCRYPTED_DSMR_VERSIONS,
     LOGGER,
     RFXTRX_DSMR_PROTOCOL,
@@ -48,14 +46,12 @@ class DSMRConnection:
         dsmr_version: str,
         protocol: str,
         encryption_key: str = "",
-        authentication_key: str = "",
     ) -> None:
         """Initialize."""
         self._port = port
         self._dsmr_version = dsmr_version
         self._protocol = protocol
         self._encryption_key = encryption_key
-        self._authentication_key = authentication_key
         self._decryption_failed = False
         self._telegram: dict[str, DSMRObject] = {}
         self._equipment_identifier = obis_ref.EQUIPMENT_IDENTIFIER
@@ -94,17 +90,14 @@ class DSMRConnection:
                 self._telegram = telegram
                 transport.close()
 
-        # The encryption keys are only supported by the standard DSMR reader,
-        # not by the RFXtrx reader. Encrypted meters always use DSMR_PROTOCOL.
-        # A network meter is reached by entering a socket://host:port URL, which
+        # The encryption key is only supported by the standard DSMR reader, not
+        # by the RFXtrx reader. Encrypted meters always use DSMR_PROTOCOL. A
+        # network meter is reached by entering a socket://host:port URL, which
         # the serial reader opens itself, so there is a single reader path.
         key_kwargs: dict[str, str] = {}
         if self._protocol == DSMR_PROTOCOL:
             create_reader = create_dsmr_reader
-            key_kwargs = {
-                "encryption_key": self._encryption_key,
-                "authentication_key": self._authentication_key,
-            }
+            key_kwargs = {"encryption_key": self._encryption_key}
         else:
             create_reader = create_rfxtrx_dsmr_reader
         reader_factory = partial(
@@ -153,7 +146,6 @@ async def _validate_dsmr_connection(
         data[CONF_DSMR_VERSION],
         protocol,
         data.get(CONF_ENCRYPTION_KEY, ""),
-        data.get(CONF_AUTHENTICATION_KEY, ""),
     )
 
     if not await conn.validate_connect(hass):
@@ -226,31 +218,23 @@ class DSMRFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_encryption_key(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the decryption key(s) of an encrypted meter.
+        """Ask for the decryption key of an encrypted meter.
 
-        The authentication key is only requested for meters that need a
-        user-supplied one. The Luxembourg Smarty (``MSn``) uses a fixed public
-        authentication key built into the spec, so only the encryption key is
-        asked for there.
+        Only the encryption key is needed: decryption does not verify the GCM
+        authentication tag (integrity comes from the telegram CRC), so no
+        authentication key is required.
         """
         errors: dict[str, str] = {}
-        needs_auth_key = (
-            self._pending_data[CONF_DSMR_VERSION] not in EMBEDDED_AUTH_KEY_VERSIONS
-        )
         if user_input is not None:
             validate_data = {
                 **self._pending_data,
                 CONF_ENCRYPTION_KEY: user_input[CONF_ENCRYPTION_KEY],
-                CONF_AUTHENTICATION_KEY: user_input.get(CONF_AUTHENTICATION_KEY, ""),
             }
             data = await self.async_validate_dsmr(validate_data, errors)
             if not errors:
                 return self.async_create_entry(title=self._pending_title, data=data)
 
-        schema_dict: dict[Any, Any] = {vol.Required(CONF_ENCRYPTION_KEY): str}
-        if needs_auth_key:
-            schema_dict[vol.Required(CONF_AUTHENTICATION_KEY)] = str
-        schema = vol.Schema(schema_dict)
+        schema = vol.Schema({vol.Required(CONF_ENCRYPTION_KEY): str})
         return self.async_show_form(
             step_id="encryption_key",
             data_schema=schema,

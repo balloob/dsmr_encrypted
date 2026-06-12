@@ -8,9 +8,12 @@ It is a fork of the built‑in Home Assistant [`dsmr`] integration that bundles 
 **vendored** copy of [`dsmr_parser`] including:
 
 - **Luxembourg Smarty (`MSn`) support** — the encrypted telegram specification
-  with the fixed, public authentication key from the *Luxmetering E‑Meter P1
-  Specification v1.1.3* (§3.2.5), so you only need to supply your per‑meter
-  encryption key. (Based on [ndokter/dsmr_parser#178].)
+  (OBIS objects from the *Luxmetering E‑Meter P1 Specification v1.1.3*; based on
+  [ndokter/dsmr_parser#178]). You only supply your per‑meter encryption key.
+- **Single‑key decryption** — decryption uses only the encryption key and does
+  **not** verify the GCM authentication tag (as ESPHome does); the telegram CRC
+  provides integrity. So no authentication key is ever required, for any
+  encrypted meter.
 - **Binary frame handling in the readers** — encrypted telegrams are binary DLMS
   frames (starting with `0xDB`), not the plain `/…!XXXX` text frames. The serial
   and network readers now assemble these frames off the wire and decrypt them.
@@ -69,13 +72,11 @@ Already ported from core:
 Fork‑only (not from core, won't transfer upstream as‑is): the encrypted meter
 support, the **labelled** version picker (`DSMR_VERSIONS` is a `token → label`
 dict; core uses a plain set / i18n strings), and the vendored parser's
-**decrypt‑without‑verification fallback** for meters configured without a
-user‑supplied authentication key (Luxembourg Smarty): when authenticated GCM
-decryption fails against the spec's fixed public auth key, it decrypts using
-only the encryption key (as ESPHome does) and relies on the telegram CRC. This
-is intentionally *not* in the upstream `dsmr_parser` branch — it changes the
-authenticated behaviour added in #178 and warrants a separate upstream
-discussion.
+**single‑key, decrypt‑without‑verification** behaviour (when no authentication
+key is supplied it decrypts with only the encryption key and relies on the
+telegram CRC, as ESPHome does). This is intentionally *not* in the upstream
+`dsmr_parser` branch — it changes the authenticated behaviour added in #178 and
+warrants a separate upstream discussion.
 
 [home-assistant/core#171103]: https://github.com/home-assistant/core/pull/171103
 [core@d7f42ed]: https://github.com/home-assistant/core/commit/d7f42ed0c06f9bb2fd1abd32a53099edd2a42402
@@ -103,12 +104,10 @@ discussion.
      grid (Energienetze Steiermark), encrypted. Not for Luxembourg.
    - or any of the standard plain versions (`5`, `5B`, `5L`, …)
 4. When an encrypted version is selected, you are asked for the **decryption
-   key**:
-   - **Luxembourg Smarty (`MSn`)** — enter only the **encryption key** supplied
-     by your grid operator (Creos). Leave the authentication key empty; the
-     public authentication key is built in.
-   - **Austrian Sagemcom** — enter both the **encryption key** and the
-     **authentication key**.
+   key** — the single per‑meter encryption key from your grid operator. No
+   authentication key is needed: decryption does not verify the GCM tag
+   (integrity comes from the telegram CRC), so one key is enough for every
+   encrypted meter.
 
 ### Getting your Luxembourg key
 
@@ -119,14 +118,13 @@ Request the P1 port activation and the encryption key from your grid operator
 
 | Version | Meter | Keys needed |
 | --- | --- | --- |
-| `MSn` | Luxembourg Smarty (a Sagemcom T210‑D) | encryption key only (auth key built in) |
-| `SAGEMCOM_T210_D_R` | Sagemcom T210‑D‑R on the Austrian grid (Energienetze Steiermark) | encryption + authentication key |
+| `MSn` | Luxembourg Smarty (a Sagemcom T210‑D) | encryption key only |
+| `SAGEMCOM_T210_D_R` | Sagemcom T210‑D‑R on the Austrian grid (Energienetze Steiermark) | encryption key only |
 | `2.2`/`4`/`5`/`5B`/`5L`/`5S`/`Q3D`/`5EONHU` | standard plain DSMR meters | none |
 
 > **Luxembourg + "Sagemcom T210‑D"?** The Luxembourg Smarty is Sagemcom T210‑D
-> hardware, so use **`MSn`** (single encryption key). The `SAGEMCOM_T210_D_R`
-> option is the *Austrian grid* configuration (different telegram layout, needs a
-> separate authentication key) — not for Luxembourg.
+> hardware, so use **`MSn`**. The `SAGEMCOM_T210_D_R` option is the *Austrian
+> grid* configuration (different telegram layout) — not for Luxembourg.
 
 ## Credits & license
 

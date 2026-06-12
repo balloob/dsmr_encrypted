@@ -20,7 +20,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
-    CONF_AUTHENTICATION_KEY,
     CONF_DSMR_VERSION,
     CONF_ENCRYPTION_KEY,
     DSMR_PROTOCOL,
@@ -59,14 +58,11 @@ def _create_reader_factory(
     if CONF_HOST in entry.data:
         port = f"socket://{entry.data[CONF_HOST]}:{port}"
 
-    # Decryption keys are only supported by the standard DSMR reader.
+    # The encryption key is only supported by the standard DSMR reader.
     key_kwargs: dict[str, str] = {}
     if entry.data.get(CONF_PROTOCOL, DSMR_PROTOCOL) == DSMR_PROTOCOL:
         create_reader = create_dsmr_reader
-        key_kwargs = {
-            "encryption_key": entry.data.get(CONF_ENCRYPTION_KEY, ""),
-            "authentication_key": entry.data.get(CONF_AUTHENTICATION_KEY, ""),
-        }
+        key_kwargs = {"encryption_key": entry.data.get(CONF_ENCRYPTION_KEY, "")}
     else:
         create_reader = create_rfxtrx_dsmr_reader
 

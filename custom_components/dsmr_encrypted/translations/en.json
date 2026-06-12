@@ -24,12 +24,10 @@
       },
       "encryption_key": {
         "data": {
-          "encryption_key": "Decryption key",
-          "authentication_key": "Authentication key"
+          "encryption_key": "Decryption key"
         },
         "data_description": {
-          "encryption_key": "The per-meter decryption key provided by your grid operator (32 hex characters).",
-          "authentication_key": "The authentication key for this meter (required for the Sagemcom T210-D-R on the Austrian grid)."
+          "encryption_key": "The per-meter decryption key provided by your grid operator (32 hex characters)."
         },
         "title": "Enter decryption key"
       }

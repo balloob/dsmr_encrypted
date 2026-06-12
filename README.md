@@ -78,8 +78,11 @@ port / network serial‑proxy picker).
 1. Choose **Serial** or **Network**.
 2. Select the port/device (serial) or host + port (network).
 3. Select the **DSMR version**:
-   - `MSn` — Luxembourg Smarty (encrypted)
-   - `SAGEMCOM_T210_D_R` — Austrian Sagemcom T210‑D‑R (encrypted)
+   - `MSn` — **Luxembourg Smarty** (encrypted). The Luxembourg Smarty *is* a
+     Sagemcom T210‑D, so pick this even if your meter is labelled "Sagemcom
+     T210‑D".
+   - `SAGEMCOM_T210_D_R` — Sagemcom T210‑D‑R as deployed on the **Austrian**
+     grid (Energienetze Steiermark), encrypted. Not for Luxembourg.
    - or any of the standard plain versions (`5`, `5B`, `5L`, …)
 4. When an encrypted version is selected, you are asked for the **decryption
    key**:
@@ -98,9 +101,14 @@ Request the P1 port activation and the encryption key from your grid operator
 
 | Version | Meter | Keys needed |
 | --- | --- | --- |
-| `MSn` | Luxembourg Smarty | encryption key only (auth key built in) |
-| `SAGEMCOM_T210_D_R` | Austrian Sagemcom T210‑D‑R | encryption + authentication key |
+| `MSn` | Luxembourg Smarty (a Sagemcom T210‑D) | encryption key only (auth key built in) |
+| `SAGEMCOM_T210_D_R` | Sagemcom T210‑D‑R on the Austrian grid (Energienetze Steiermark) | encryption + authentication key |
 | `2.2`/`4`/`5`/`5B`/`5L`/`5S`/`Q3D`/`5EONHU` | standard plain DSMR meters | none |
+
+> **Luxembourg + "Sagemcom T210‑D"?** The Luxembourg Smarty is Sagemcom T210‑D
+> hardware, so use **`MSn`** (single encryption key). The `SAGEMCOM_T210_D_R`
+> option is the *Austrian grid* configuration (different telegram layout, needs a
+> separate authentication key) — not for Luxembourg.
 
 ## Credits & license
 

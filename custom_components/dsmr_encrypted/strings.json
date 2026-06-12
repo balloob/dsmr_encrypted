@@ -12,18 +12,13 @@
       "invalid_key": "The decryption key is invalid. Check the key and try again."
     },
     "step": {
-      "setup_network": {
-        "data": {
-          "dsmr_version": "Select DSMR version",
-          "host": "[%key:common::config_flow::data::host%]",
-          "port": "[%key:common::config_flow::data::port%]"
-        },
-        "title": "Select connection address"
-      },
-      "setup_serial": {
+      "user": {
         "data": {
           "dsmr_version": "Select DSMR version",
           "port": "Select device"
+        },
+        "data_description": {
+          "port": "Select a serial device, or enter a network address such as socket://host:port"
         },
         "title": "[%key:common::config_flow::data::device%]"
       },
@@ -37,12 +32,6 @@
           "authentication_key": "Optional. Only needed for meters that use a separate authentication key (e.g. Austrian Sagemcom). Leave empty for Luxembourg Smarty."
         },
         "title": "Enter decryption key"
-      },
-      "user": {
-        "data": {
-          "type": "Connection type"
-        },
-        "title": "Select connection type"
       }
     }
   },

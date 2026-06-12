@@ -9,11 +9,8 @@ from datetime import timedelta
 from enum import IntEnum
 from functools import partial
 
-from .dsmr_parser.clients.protocol import create_dsmr_reader, create_tcp_dsmr_reader
-from .dsmr_parser.clients.rfxtrx_protocol import (
-    create_rfxtrx_dsmr_reader,
-    create_rfxtrx_tcp_dsmr_reader,
-)
+from .dsmr_parser.clients.protocol import DSMRProtocol
+from .dsmr_parser.clients.rfxtrx_protocol import RFXtrxDSMRProtocol
 from .dsmr_parser.objects import DSMRObject, MbusDevice, Telegram
 
 from homeassistant.components.sensor import (
@@ -25,9 +22,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_HOST,
-    CONF_PORT,
-    CONF_PROTOCOL,
     EVENT_HOMEASSISTANT_STOP,
     EntityCategory,
     UnitOfEnergy,
@@ -46,9 +40,7 @@ from homeassistant.util import Throttle
 
 from . import DsmrConfigEntry
 from .const import (
-    CONF_AUTHENTICATION_KEY,
     CONF_DSMR_VERSION,
-    CONF_ENCRYPTION_KEY,
     CONF_SERIAL_ID,
     CONF_SERIAL_ID_GAS,
     CONF_TIME_BETWEEN_UPDATE,
@@ -60,7 +52,6 @@ from .const import (
     DEVICE_NAME_HEAT,
     DEVICE_NAME_WATER,
     DOMAIN,
-    DSMR_PROTOCOL,
     LOGGER,
 )
 
@@ -771,50 +762,19 @@ async def async_setup_entry(
                 hass, EVENT_FIRST_TELEGRAM.format(entry.entry_id), telegram
             )
 
-    # Creates an asyncio.Protocol factory for reading DSMR telegrams from
-    # serial and calls update_entities_telegram to update entities on arrival
-    protocol = entry.data.get(CONF_PROTOCOL, DSMR_PROTOCOL)
-    # Decryption keys are only supported by the standard DSMR readers.
-    key_kwargs: dict[str, str] = {}
-    if protocol == DSMR_PROTOCOL:
-        key_kwargs = {
-            "encryption_key": entry.data.get(CONF_ENCRYPTION_KEY, ""),
-            "authentication_key": entry.data.get(CONF_AUTHENTICATION_KEY, ""),
-        }
-    if CONF_HOST in entry.data:
-        if protocol == DSMR_PROTOCOL:
-            create_reader = create_tcp_dsmr_reader
-        else:
-            create_reader = create_rfxtrx_tcp_dsmr_reader
-        reader_factory = partial(
-            create_reader,
-            entry.data[CONF_HOST],
-            entry.data[CONF_PORT],
-            dsmr_version,
-            update_entities_telegram,
-            loop=hass.loop,
-            keep_alive_interval=60,
-            **key_kwargs,
-        )
-    else:
-        if protocol == DSMR_PROTOCOL:
-            create_reader = create_dsmr_reader
-        else:
-            create_reader = create_rfxtrx_dsmr_reader
-        reader_factory = partial(
-            create_reader,
-            entry.data[CONF_PORT],
-            dsmr_version,
-            update_entities_telegram,
-            loop=hass.loop,
-            **key_kwargs,
-        )
+    # Creates an asyncio.Protocol factory for reading DSMR telegrams from the
+    # configured port and calls update_entities_telegram on arrival. The reader
+    # factory (incl. host/port handling and decryption keys) is built in
+    # __init__ and stored on the config entry's runtime data.
+    reader_factory = partial(
+        entry.runtime_data.reader_factory, update_entities_telegram
+    )
 
     async def connect_and_reconnect() -> None:
         """Connect to DSMR and keep reconnecting until Home Assistant stops."""
         stop_listener = None
-        transport = None
-        protocol = None
+        transport: asyncio.BaseTransport | None = None
+        protocol: DSMRProtocol | RFXtrxDSMRProtocol | None = None
 
         while hass.state is CoreState.not_running or hass.is_running:
             # Start DSMR asyncio.Protocol reader
@@ -824,9 +784,9 @@ async def async_setup_entry(
             update_entities_telegram({})
 
             try:
-                transport, protocol = await hass.loop.create_task(reader_factory())
+                transport, protocol = await reader_factory()
 
-                if transport:
+                if transport is not None and protocol is not None:
                     # Register listener to close transport on HA shutdown
                     @callback
                     def close_transport(_event: Event) -> None:

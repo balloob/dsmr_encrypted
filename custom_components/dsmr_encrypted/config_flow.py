@@ -5,11 +5,8 @@ from functools import partial
 from typing import Any
 
 from .dsmr_parser import obis_references as obis_ref
-from .dsmr_parser.clients.protocol import create_dsmr_reader, create_tcp_dsmr_reader
-from .dsmr_parser.clients.rfxtrx_protocol import (
-    create_rfxtrx_dsmr_reader,
-    create_rfxtrx_tcp_dsmr_reader,
-)
+from .dsmr_parser.clients.protocol import create_dsmr_reader
+from .dsmr_parser.clients.rfxtrx_protocol import create_rfxtrx_dsmr_reader
 from .dsmr_parser.objects import DSMRObject
 import voluptuous as vol
 
@@ -19,7 +16,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_PROTOCOL, CONF_TYPE
+from homeassistant.const import CONF_PORT, CONF_PROTOCOL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import SerialPortSelector
@@ -46,15 +43,13 @@ class DSMRConnection:
 
     def __init__(
         self,
-        host: str | None,
-        port: int,
+        port: str,
         dsmr_version: str,
         protocol: str,
         encryption_key: str = "",
         authentication_key: str = "",
     ) -> None:
         """Initialize."""
-        self._host = host
         self._port = port
         self._dsmr_version = dsmr_version
         self._protocol = protocol
@@ -98,45 +93,30 @@ class DSMRConnection:
                 self._telegram = telegram
                 transport.close()
 
-        # The encryption keys are only supported by the standard DSMR readers,
-        # not by the RFXtrx readers. Encrypted meters always use DSMR_PROTOCOL.
+        # The encryption keys are only supported by the standard DSMR reader,
+        # not by the RFXtrx reader. Encrypted meters always use DSMR_PROTOCOL.
+        # A network meter is reached by entering a socket://host:port URL, which
+        # the serial reader opens itself, so there is a single reader path.
         key_kwargs: dict[str, str] = {}
         if self._protocol == DSMR_PROTOCOL:
+            create_reader = create_dsmr_reader
             key_kwargs = {
                 "encryption_key": self._encryption_key,
                 "authentication_key": self._authentication_key,
             }
-
-        if self._host is None:
-            if self._protocol == DSMR_PROTOCOL:
-                create_reader = create_dsmr_reader
-            else:
-                create_reader = create_rfxtrx_dsmr_reader
-            reader_factory = partial(
-                create_reader,
-                self._port,
-                self._dsmr_version,
-                update_telegram,
-                loop=hass.loop,
-                **key_kwargs,
-            )
         else:
-            if self._protocol == DSMR_PROTOCOL:
-                create_reader = create_tcp_dsmr_reader
-            else:
-                create_reader = create_rfxtrx_tcp_dsmr_reader
-            reader_factory = partial(
-                create_reader,
-                self._host,
-                self._port,
-                self._dsmr_version,
-                update_telegram,
-                loop=hass.loop,
-                **key_kwargs,
-            )
+            create_reader = create_rfxtrx_dsmr_reader
+        reader_factory = partial(
+            create_reader,
+            self._port,
+            self._dsmr_version,
+            update_telegram,
+            loop=hass.loop,
+            **key_kwargs,
+        )
 
         try:
-            transport, protocol = await asyncio.create_task(reader_factory())
+            transport, protocol = await reader_factory()
         except OSError:
             LOGGER.exception("Error connecting to DSMR")
             return False
@@ -168,7 +148,6 @@ async def _validate_dsmr_connection(
 ) -> dict[str, str | None]:
     """Validate the user input allows us to connect."""
     conn = DSMRConnection(
-        data.get(CONF_HOST),
         data[CONF_PORT],
         data[CONF_DSMR_VERSION],
         protocol,
@@ -214,52 +193,12 @@ class DSMRFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Step when user initializes a integration."""
-        if user_input is not None:
-            user_selection = user_input[CONF_TYPE]
-            if user_selection == "Serial":
-                return await self.async_step_setup_serial()
+        """Step when user initializes a integration.
 
-            return await self.async_step_setup_network()
-
-        list_of_types = ["Serial", "Network"]
-
-        schema = vol.Schema({vol.Required(CONF_TYPE): vol.In(list_of_types)})
-        return self.async_show_form(step_id="user", data_schema=schema)
-
-    async def async_step_setup_network(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Step when setting up network configuration."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            if user_input[CONF_DSMR_VERSION] in ENCRYPTED_DSMR_VERSIONS:
-                self._pending_data = user_input
-                self._pending_title = f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
-                return await self.async_step_encryption_key()
-            data = await self.async_validate_dsmr(user_input, errors)
-            if not errors:
-                return self.async_create_entry(
-                    title=f"{data[CONF_HOST]}:{data[CONF_PORT]}", data=data
-                )
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST): str,
-                vol.Required(CONF_PORT): int,
-                vol.Required(CONF_DSMR_VERSION): vol.In(DSMR_VERSIONS),
-            }
-        )
-        return self.async_show_form(
-            step_id="setup_network",
-            data_schema=schema,
-            errors=errors,
-        )
-
-    async def async_step_setup_serial(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Step when setting up serial configuration."""
+        A single serial port selector handles both local serial devices and
+        network connections; a network meter can be reached by entering a URL
+        such as ``socket://host:port``.
+        """
         errors: dict[str, str] = {}
         if user_input is not None:
             if user_input[CONF_DSMR_VERSION] in ENCRYPTED_DSMR_VERSIONS:
@@ -278,7 +217,7 @@ class DSMRFlowHandler(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(
-            step_id="setup_serial",
+            step_id="user",
             data_schema=schema,
             errors=errors,
         )

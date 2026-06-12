@@ -1,28 +1,82 @@
 """The dsmr component."""
 
-from asyncio import CancelledError, Task
+from asyncio import BaseTransport, CancelledError, Task
+from collections.abc import Callable, Coroutine
 from contextlib import suppress
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
+from .dsmr_parser.clients.protocol import DSMRProtocol, create_dsmr_reader
+from .dsmr_parser.clients.rfxtrx_protocol import (
+    RFXtrxDSMRProtocol,
+    create_rfxtrx_dsmr_reader,
+)
 from .dsmr_parser.objects import Telegram
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST, CONF_PORT, CONF_PROTOCOL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 
-from .const import CONF_DSMR_VERSION, PLATFORMS
+from .const import (
+    CONF_AUTHENTICATION_KEY,
+    CONF_DSMR_VERSION,
+    CONF_ENCRYPTION_KEY,
+    DSMR_PROTOCOL,
+    PLATFORMS,
+)
+
+type DsmrReaderFactory = Callable[
+    [Callable[[Telegram], None]],
+    Coroutine[Any, Any, tuple[BaseTransport, DSMRProtocol | RFXtrxDSMRProtocol]],
+]
 
 
 @dataclass
 class DsmrState:
     """State of integration."""
 
+    reader_factory: DsmrReaderFactory
     task: Task | None = None
     telegram: Telegram | None = None
 
 
 type DsmrConfigEntry = ConfigEntry[DsmrState]
+
+
+def _create_reader_factory(
+    hass: HomeAssistant, entry: DsmrConfigEntry
+) -> DsmrReaderFactory:
+    """Build the DSMR reader factory for a config entry.
+
+    Legacy network entries stored the host and port separately. They are
+    combined into a single ``socket://host:port`` value here, in memory only;
+    the stored entry is left untouched so downgrading Home Assistant keeps
+    working. The serial library opens both local devices and such URLs.
+    """
+    port = entry.data[CONF_PORT]
+    if CONF_HOST in entry.data:
+        port = f"socket://{entry.data[CONF_HOST]}:{port}"
+
+    # Decryption keys are only supported by the standard DSMR reader.
+    key_kwargs: dict[str, str] = {}
+    if entry.data.get(CONF_PROTOCOL, DSMR_PROTOCOL) == DSMR_PROTOCOL:
+        create_reader = create_dsmr_reader
+        key_kwargs = {
+            "encryption_key": entry.data.get(CONF_ENCRYPTION_KEY, ""),
+            "authentication_key": entry.data.get(CONF_AUTHENTICATION_KEY, ""),
+        }
+    else:
+        create_reader = create_rfxtrx_dsmr_reader
+
+    return partial(
+        create_reader,
+        port,
+        entry.data[CONF_DSMR_VERSION],
+        loop=hass.loop,
+        **key_kwargs,
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: DsmrConfigEntry) -> bool:
@@ -37,7 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DsmrConfigEntry) -> bool
 
     await er.async_migrate_entries(hass, entry.entry_id, _async_migrate_entity_entry)
 
-    entry.runtime_data = DsmrState()
+    entry.runtime_data = DsmrState(reader_factory=_create_reader_factory(hass, entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 

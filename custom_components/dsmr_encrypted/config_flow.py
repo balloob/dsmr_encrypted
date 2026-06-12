@@ -94,10 +94,15 @@ class DSMRConnection:
         # by the RFXtrx reader. Encrypted meters always use DSMR_PROTOCOL. A
         # network meter is reached by entering a socket://host:port URL, which
         # the serial reader opens itself, so there is a single reader path.
-        key_kwargs: dict[str, str] = {}
+        # authentication_key=None opts into decrypt-without-verification (the
+        # GCM tag is not checked; integrity comes from the telegram CRC).
+        key_kwargs: dict[str, Any] = {}
         if self._protocol == DSMR_PROTOCOL:
             create_reader = create_dsmr_reader
-            key_kwargs = {"encryption_key": self._encryption_key}
+            key_kwargs = {
+                "encryption_key": self._encryption_key,
+                "authentication_key": None,
+            }
         else:
             create_reader = create_rfxtrx_dsmr_reader
         reader_factory = partial(

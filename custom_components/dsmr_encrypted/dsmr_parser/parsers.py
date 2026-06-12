@@ -87,20 +87,12 @@ class TelegramParser(object):
                     logger.warning("Untested compression")
                 if apdu.security_control.broadcast_key:
                     logger.warning("Untested broadcast key")
-                if authentication_key:
-                    # An authentication key was supplied: do authenticated GCM
-                    # decryption and treat a verification failure as fatal.
-                    auth_key = unhexlify(authentication_key)
-                    try:
-                        telegram_data = apdu.to_plain_apdu(enc_key, auth_key).decode("ascii")
-                    except DlmsDecryptionError as err:
-                        raise DecryptionError("Failed to decrypt telegram: %s" % err) from err
-                else:
-                    # No authentication key: decrypt without verifying the GCM
-                    # tag, using only the encryption key (as ESPHome does), and
-                    # rely on the telegram's own CRC for integrity. A wrong
-                    # encryption key yields non-ASCII garbage / no leading '/'
-                    # and is rejected as a fatal DecryptionError.
+                if authentication_key is None:
+                    # Opt-in (authentication_key=None): decrypt without verifying
+                    # the GCM tag, using only the encryption key (as ESPHome
+                    # does), and rely on the telegram's own CRC for integrity. A
+                    # wrong encryption key yields non-ASCII garbage / no leading
+                    # '/' and is rejected as a fatal DecryptionError.
                     try:
                         telegram_data = _decrypt_without_verification(
                             apdu, enc_key
@@ -109,6 +101,17 @@ class TelegramParser(object):
                         telegram_data = ""
                     if not telegram_data.startswith("/"):
                         raise DecryptionError("Failed to decrypt telegram, wrong encryption key?")
+                else:
+                    # Authenticated GCM decryption. Falls back to the spec's
+                    # embedded authentication key when the caller passes "".
+                    effective_auth_key = authentication_key or self.telegram_specification.get(
+                        "authentication_key", ""
+                    )
+                    auth_key = unhexlify(effective_auth_key)
+                    try:
+                        telegram_data = apdu.to_plain_apdu(enc_key, auth_key).decode("ascii")
+                    except DlmsDecryptionError as err:
+                        raise DecryptionError("Failed to decrypt telegram: %s" % err) from err
             else:
                 try:
                     if unhexlify(telegram_data[0:2])[0] == GeneralGlobalCipher.TAG:

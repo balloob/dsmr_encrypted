@@ -59,10 +59,15 @@ def _create_reader_factory(
         port = f"socket://{entry.data[CONF_HOST]}:{port}"
 
     # The encryption key is only supported by the standard DSMR reader.
-    key_kwargs: dict[str, str] = {}
+    # authentication_key=None opts into decrypt-without-verification (the GCM
+    # tag is not checked; integrity comes from the telegram CRC).
+    key_kwargs: dict[str, Any] = {}
     if entry.data.get(CONF_PROTOCOL, DSMR_PROTOCOL) == DSMR_PROTOCOL:
         create_reader = create_dsmr_reader
-        key_kwargs = {"encryption_key": entry.data.get(CONF_ENCRYPTION_KEY, "")}
+        key_kwargs = {
+            "encryption_key": entry.data.get(CONF_ENCRYPTION_KEY, ""),
+            "authentication_key": None,
+        }
     else:
         create_reader = create_rfxtrx_dsmr_reader
 

@@ -33,9 +33,9 @@ DEVICE_NAME_HEAT = "Heat Meter"
 # the Luxembourg Smarty IS a Sagemcom T210-D, so a Luxembourg user with a meter
 # labelled "Sagemcom T210-D" should pick MSn (not the Austrian SAGEMCOM option).
 DSMR_VERSIONS = {
+    "5": "DSMR 5",
     "MSn": "Luxembourg Smarty / Sagemcom T210-D — encrypted (Creos)",
     "SAGEMCOM_T210_D_R": "Sagemcom T210-D-R — encrypted (Austria, Energienetze Steiermark)",
-    "5": "DSMR 5",
     "5B": "DSMR 5B (Belgium, Fluvius)",
     "5L": "DSMR 5L (Luxembourg, unencrypted)",
     "5S": "DSMR 5S (Sweden)",

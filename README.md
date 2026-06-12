@@ -57,10 +57,21 @@ git fetch origin dev
 git diff <fork-base-commit>..origin/dev -- homeassistant/components/dsmr/
 ```
 
-Already ported: [home-assistant/core#171103] (`SerialPortSelector` for the serial
-port / network serial‑proxy picker).
+Already ported from core:
+
+- [home-assistant/core#171103] — `SerialPortSelector` for the serial port /
+  network serial‑proxy picker.
+- [core@d7f42ed] — single serial‑port‑selector config flow: one `user` step,
+  network meters via `socket://host:port`, reader factory built in `__init__`
+  with legacy host+port migration; drops `create_tcp_dsmr_reader` /
+  `create_rfxtrx_tcp_dsmr_reader`.
+
+Fork‑only (not from core, won't transfer upstream as‑is): the encrypted meter
+support, and the **labelled** version picker (`DSMR_VERSIONS` is a
+`token → label` dict; core uses a plain set / i18n strings).
 
 [home-assistant/core#171103]: https://github.com/home-assistant/core/pull/171103
+[core@d7f42ed]: https://github.com/home-assistant/core/commit/d7f42ed0c06f9bb2fd1abd32a53099edd2a42402
 
 ## Installation (HACS)
 

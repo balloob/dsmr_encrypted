@@ -29,7 +29,7 @@
         },
         "data_description": {
           "encryption_key": "The per-meter decryption key provided by your grid operator (32 hex characters).",
-          "authentication_key": "Optional. Only needed for meters that use a separate authentication key (e.g. Austrian Sagemcom). Leave empty for Luxembourg Smarty."
+          "authentication_key": "The authentication key for this meter (required for the Sagemcom T210-D-R on the Austrian grid)."
         },
         "title": "Enter decryption key"
       }

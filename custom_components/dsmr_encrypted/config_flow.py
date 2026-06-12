@@ -32,6 +32,7 @@ from .const import (
     DOMAIN,
     DSMR_PROTOCOL,
     DSMR_VERSIONS,
+    EMBEDDED_AUTH_KEY_VERSIONS,
     ENCRYPTED_DSMR_VERSIONS,
     LOGGER,
     RFXTRX_DSMR_PROTOCOL,
@@ -225,8 +226,17 @@ class DSMRFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_encryption_key(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the decryption key(s) of an encrypted meter."""
+        """Ask for the decryption key(s) of an encrypted meter.
+
+        The authentication key is only requested for meters that need a
+        user-supplied one. The Luxembourg Smarty (``MSn``) uses a fixed public
+        authentication key built into the spec, so only the encryption key is
+        asked for there.
+        """
         errors: dict[str, str] = {}
+        needs_auth_key = (
+            self._pending_data[CONF_DSMR_VERSION] not in EMBEDDED_AUTH_KEY_VERSIONS
+        )
         if user_input is not None:
             validate_data = {
                 **self._pending_data,
@@ -237,12 +247,10 @@ class DSMRFlowHandler(ConfigFlow, domain=DOMAIN):
             if not errors:
                 return self.async_create_entry(title=self._pending_title, data=data)
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_ENCRYPTION_KEY): str,
-                vol.Optional(CONF_AUTHENTICATION_KEY, default=""): str,
-            }
-        )
+        schema_dict: dict[Any, Any] = {vol.Required(CONF_ENCRYPTION_KEY): str}
+        if needs_auth_key:
+            schema_dict[vol.Required(CONF_AUTHENTICATION_KEY)] = str
+        schema = vol.Schema(schema_dict)
         return self.async_show_form(
             step_id="encryption_key",
             data_schema=schema,

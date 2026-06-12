@@ -49,5 +49,10 @@ DSMR_VERSIONS = {
 # and therefore require an encryption key.
 ENCRYPTED_DSMR_VERSIONS = {"MSn", "SAGEMCOM_T210_D_R"}
 
+# Encrypted versions whose authentication key is fixed/public and embedded in
+# the telegram spec, so the user only supplies the encryption key (no auth-key
+# field in the config flow). The Luxembourg Smarty (MSn) is one such meter.
+EMBEDDED_AUTH_KEY_VERSIONS = {"MSn"}
+
 DSMR_PROTOCOL = "dsmr_protocol"
 RFXTRX_DSMR_PROTOCOL = "rfxtrx_dsmr_protocol"

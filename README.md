@@ -29,12 +29,12 @@ config‑flow key entry → Home Assistant entities — can be exercised end‑t
 real meter **while the underlying changes are being upstreamed**. The plan is to
 land the library and integration changes upstream and then retire this repo.
 
-The bundled library changes live on the [phase‑2 branch] of a `dsmr_parser` fork
-and are being upstreamed in two pieces:
+The bundled library changes are being upstreamed in two pieces:
 
-- **Luxembourg Smarty (`MSn`) spec + fixed public auth key** → [ndokter/dsmr_parser#178].
+- **Luxembourg Smarty (`MSn`) spec + fixed public auth key** → [ndokter/dsmr_parser#178]
+  — **merged**, released in `dsmr-parser` v1.8.0.
 - **Binary framing + key plumbing through the readers** → the [phase‑2 branch]
-  (to be opened as a follow‑up PR against `dsmr_parser`).
+  (rebased onto v1.8.0; to be opened as a follow‑up PR against `dsmr_parser`).
 
 Once both land in a released `dsmr-parser` and Home Assistant's built‑in [`dsmr`]
 integration picks it up, this custom integration is no longer needed.
@@ -44,6 +44,23 @@ integration picks it up, this custom integration is no longer needed.
 > telegram support over the readers. Vendoring the library here avoids a dependency
 > clash with that pinned version, so this integration can run alongside the built‑in
 > one for testing.
+
+### Keeping in sync with Home Assistant core
+
+The integration code is a fork of core's built‑in [`dsmr`] integration, so it
+drifts as core's `dsmr` evolves. When syncing, diff the fork base against core
+`dev` and port any `dsmr` changes (e.g. config‑flow / serial‑port handling):
+
+```bash
+# in a Home Assistant core checkout
+git fetch origin dev
+git diff <fork-base-commit>..origin/dev -- homeassistant/components/dsmr/
+```
+
+Already ported: [home-assistant/core#171103] (`SerialPortSelector` for the serial
+port / network serial‑proxy picker).
+
+[home-assistant/core#171103]: https://github.com/home-assistant/core/pull/171103
 
 ## Installation (HACS)
 

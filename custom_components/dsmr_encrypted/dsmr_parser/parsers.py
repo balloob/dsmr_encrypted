@@ -5,6 +5,7 @@ from binascii import unhexlify
 from ctypes import c_ushort
 from decimal import Decimal
 
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from dlms_cosem.connection import XDlmsApduFactory
 from dlms_cosem.exceptions import DecryptionError as DlmsDecryptionError
 from dlms_cosem.protocol.xdlms import GeneralGlobalCipher
@@ -14,6 +15,29 @@ from .exceptions import ParseError, InvalidChecksumError, DecryptionError
 from .value_types import timestamp
 
 logger = logging.getLogger(__name__)
+
+
+def _decrypt_without_verification(apdu, encryption_key):
+    """Decrypt a general-global-cipher APDU without verifying the GCM tag.
+
+    GCM decryption is AES-CTR with the counter starting at inc32(J0); for the
+    96-bit DLMS IV that is system_title || invocation_counter || 0x00000002.
+    This recovers the plaintext using only the encryption key, ignoring the
+    authentication tag -- matching what ESPHome does for meters (e.g. the
+    Luxembourg Smarty) whose authentication key is unknown or differs from the
+    one in the spec. Integrity is then provided by the telegram's CRC.
+
+    :param apdu: a decoded GeneralGlobalCipher APDU
+    :param bytes encryption_key: the 16 byte encryption key
+    :rtype: bytes
+    """
+    iv = apdu.system_title + apdu.invocation_counter.to_bytes(4, "big")
+    initial_counter = iv + (2).to_bytes(4, "big")
+    ciphertext = apdu.ciphered_text[:-12]  # strip the 12 byte GCM tag
+    decryptor = Cipher(
+        algorithms.AES(encryption_key), modes.CTR(initial_counter)
+    ).decryptor()
+    return decryptor.update(ciphertext) + decryptor.finalize()
 
 
 class TelegramParser(object):
@@ -70,15 +94,37 @@ class TelegramParser(object):
                     logger.warning("Untested compression")
                 if apdu.security_control.broadcast_key:
                     logger.warning("Untested broadcast key")
-                # A wrong key (or corrupted frame) fails GCM tag verification.
-                # Re-raise as our own DecryptionError, which callers should
-                # treat as fatal: with a configured key every telegram will
-                # fail identically, so the connection should be torn down
-                # rather than skipping telegram after telegram.
                 try:
                     telegram_data = apdu.to_plain_apdu(enc_key, auth_key).decode("ascii")
                 except DlmsDecryptionError as err:
-                    raise DecryptionError("Failed to decrypt telegram: %s" % err)
+                    # When the caller supplied an authentication key, honour it:
+                    # a verification failure is fatal (wrong key or tampered
+                    # frame).
+                    if authentication_key:
+                        raise DecryptionError(
+                            "Failed to decrypt telegram: %s" % err
+                        ) from err
+                    # Otherwise we were verifying against a fixed/spec key we may
+                    # not trust -- the Luxembourg Smarty uses a public key that
+                    # can differ per rollout. Fall back to decrypting without
+                    # verifying the GCM tag, using only the encryption key (as
+                    # ESPHome does), and let the telegram CRC provide integrity.
+                    # If the result is not a telegram, the encryption key itself
+                    # is wrong, so re-raise the fatal DecryptionError.
+                    try:
+                        telegram_data = _decrypt_without_verification(
+                            apdu, enc_key
+                        ).decode("ascii")
+                    except (UnicodeDecodeError, ValueError):
+                        telegram_data = ""
+                    if not telegram_data.startswith("/"):
+                        raise DecryptionError(
+                            "Failed to decrypt telegram: %s" % err
+                        ) from err
+                    logger.debug(
+                        "GCM tag verification failed; decrypted without "
+                        "verification, relying on the telegram CRC"
+                    )
             else:
                 try:
                     if unhexlify(telegram_data[0:2])[0] == GeneralGlobalCipher.TAG:

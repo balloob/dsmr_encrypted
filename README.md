@@ -64,10 +64,17 @@ Already ported from core:
 
 - [home-assistant/core#171103] — `SerialPortSelector` for the serial port /
   network serial‑proxy picker.
-- [core@d7f42ed] — single serial‑port‑selector config flow: one `user` step,
-  network meters via `socket://host:port`, reader factory built in `__init__`
-  with legacy host+port migration; drops `create_tcp_dsmr_reader` /
-  `create_rfxtrx_tcp_dsmr_reader`.
+- [home-assistant/core#173638] — single serial‑port‑selector config flow: one
+  `user` step, network meters via `socket://host:port`, legacy host+port
+  combined into a `socket://` URL in memory. Network meters use
+  `create_tcp_dsmr_reader` (keep‑alive watchdog); local serial uses
+  `create_dsmr_reader`.
+
+Also ported from the `dsmr_parser` library:
+
+- [ndokter/dsmr_parser#186] — `create_tcp_dsmr_reader` is a thin wrapper around
+  `create_dsmr_reader`, which gains `keep_alive_interval` and resolves the loop
+  via `asyncio.get_running_loop()`.
 
 Fork‑only (not from core, won't transfer upstream as‑is): the encrypted meter
 support, the **labelled** version picker (`DSMR_VERSIONS` is a `token → label`
@@ -79,7 +86,8 @@ telegram CRC, as ESPHome does). This is intentionally *not* in the upstream
 warrants a separate upstream discussion.
 
 [home-assistant/core#171103]: https://github.com/home-assistant/core/pull/171103
-[core@d7f42ed]: https://github.com/home-assistant/core/commit/d7f42ed0c06f9bb2fd1abd32a53099edd2a42402
+[home-assistant/core#173638]: https://github.com/home-assistant/core/pull/173638
+[ndokter/dsmr_parser#186]: https://github.com/ndokter/dsmr_parser/pull/186
 
 ## Installation (HACS)
 
